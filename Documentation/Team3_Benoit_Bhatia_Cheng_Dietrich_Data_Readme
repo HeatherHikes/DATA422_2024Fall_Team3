@@ -1,0 +1,27 @@
+# Team3_Benoit_Bhatia_Cheng_Dietrich_Data_Readme
+
+## Data Sources
+1. **Data.gov**: Retail sales data, economic indicators, and consumer spending statistics. Link
+2. **IPUMS**: Demographic and socioeconomic data. Link
+3. **EBSCOhost**: Business and economic research articles. Link
+4. **Data.Seattle.gov**: Local retail performance data. Link
+
+## Special Properties
+- **Data.gov**: Comprehensive retail sales data.
+- **IPUMS**: Detailed demographic information.
+- **EBSCOhost**: In-depth industry reports.
+- **Data.Seattle.gov**: Localized retail performance metrics.
+
+## Amount of Data
+- **Data.gov**: Approximately 10,000 records.
+- **IPUMS**: Demographic data for 1 million individuals.
+- **EBSCOhost**: 500 research articles.
+- **Data.Seattle.gov**: Foot traffic data for 100 retail locations.
+
+## Wrangling Techniques
+- **Cleaning**: Remove duplicates, handle missing values.
+- **Joining**: Merge datasets on common keys (e.g., location, time).
+- **Analysis**: Regression analysis, geospatial mapping.
+
+## Storage
+- Data will be stored in a secure cloud database accessible to all team members.
