@@ -1,135 +1,330 @@
-import pandas as pd
-from shiny import App, render, ui
+from shiny import App, render, ui, reactive
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+import numpy as np
+from data import (
+    load_ecommerce_data,
+    load_tax_data,
+    load_income_data,
+    load_residential_data,
+    load_traffic_data,
+    load_additional_ecommerce_data
+)
 
-# Data used
-dEcom = {
-    "Year": ["2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021"],
-    "Total": [3612471, 3818048, 4102952, 4302229, 4459183, 4640561, 4725985, 4848422, 5040214, 5251648, 5396594, 5572030, 6522609],
-    "E-commerce": [145507, 169921, 200357, 232145, 261455, 297862, 338128, 384269, 443712, 507622, 571714, 817195, 958715]
-}
-dTax = {
-    "Year": ["2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021"],
-    "Retail Sales Taxes Total": [132692, 138653, 144107, 148174, 154310, 160388, 166035, 172264, 179096, 188199, 197223, 205463, 241671]
-}
-dIncom = {
-    "Year": ["2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021"],
-    "10th Percentile": [17000, 16190, 15820, 16150, 15900, 15760, 16710, 16950, 17420, 17450, 18970, 21120, 20720],
-    "20th Percentile": [28080, 26720, 26700, 26670, 26250, 26500, 28110, 29090, 29280, 30090, 32250, 34450, 33800],
-    "30th Percentile": [38310, 37170, 36700, 36510, 36680, 36850, 38470, 39970, 40290, 41750, 44490, 47280, 46840],
-    "40th Percentile": [48490, 47370, 46760, 46930, 46850, 47340, 49360, 50930, 51520, 53310, 56750, 59860, 59530],
-    "50th Percentile": [59670, 58530, 57760, 58200, 58040, 59220, 61470, 63350, 64240, 63950, 66240, 70440, 73780],
-    "60th Percentile": [72900, 71700, 70780, 71420, 71150, 72230, 74860, 78120, 79330, 79190, 81150, 87150, 90120],
-    "70th Percentile": [89180, 88100, 87360, 87840, 87070, 87500, 90490, 95910, 97320, 97790, 100300, 107400, 110700],
-    "80th Percentile": [111100, 110100, 110000, 110400, 109000, 108800, 111600, 118000, 122600, 123500, 125700, 134900, 139000],
-    "90th Percentile": [147000, 146000, 149600, 149800, 148300, 150100, 154100, 161600, 165000, 168200, 171600, 184300, 185100]
-}
-dResidential = {
-    "Period": ["01/01/2019 12:00:00 AM", "04/01/2019 12:00:00 AM", "07/01/2019 12:00:00 AM", "10/01/2019 12:00:00 AM", "01/01/2020 12:00:00 AM"],
-    "Residential Foot Traffic": [2296942, 2258163, 2219671, 2376497, 2349805]
-}
-traffic_data = pd.DataFrame({
-    "Residential Foot Traffic": [
-        2296942, 2258163, 2219671, 2376497, 2349805, 2699988,
-        2652997, 2562463, 2547427, 2501998, 2289984, 2220139,
-        2297712, 2293900, 2306088, 2154991, 2527541, 2693748,
-        2662851, 2624127, 2749965
-    ],
-    "Worker Foot Traffic": [
-        9663016, 10195939, 10012114, 9550311, 7460517, 2216410,
-        2716733, 2451323, 2189171, 2473352, 2901714, 3265629,
-        3413479, 4108551, 4614833, 4474011, 4870389, 5612405,
-        5722120, 5258497, 5371674
-    ]
-})
+# Load all data
+dfEcom = load_ecommerce_data()
+dfTax = load_tax_data()
+dfIncom = load_income_data()
+dfResidential = load_residential_data()
+dfTraffic = load_traffic_data()
+dfEcomAdditional = load_additional_ecommerce_data()
 
-# Convert datasets into dataframes
-dfEcom = pd.DataFrame(dEcom)
-dfTax = pd.DataFrame(dTax)
-dfIncom = pd.DataFrame(dIncom)
-dfResidential = pd.DataFrame(dResidential)
-dfResidential["Period"] = pd.to_datetime(dfResidential["Period"])
-dfResidential["Year_Residential"] = dfResidential["Period"].dt.year
-dfTraffic = traffic_data
-
-# Shiny app interface
 app_ui = ui.page_fluid(
     ui.navset_pill(
-        ui.nav_panel("Overview", ui.h4("Panel A content")),
-        ui.nav_panel("Visualizations", ui.h4("Panel B content")),
-        ui.nav_panel("Tabulations", ui.h3("Filterable Data"),
-            ui.input_select(
-                "table_choice",
-                "Select Table",
-                ["E-commerce Data", "Tax Data", "Income Data", "Residential Data", "Foot Traffic Data"],
-                selected="E-commerce Data"
-            ),
-            ui.output_ui("year_filter"),
-            ui.output_ui("percentile_filter"),
-            ui.output_ui("table_title"),
-            ui.output_data_frame("filtered_table")
+        ui.nav_panel("Overview",
+            ui.card(
+                ui.h4("Overview of the Project/Data"),
+                ui.markdown("""
+                    ## E-Commerce Impact Analysis Project
+
+                    This comprehensive analysis explores the relationship between E-Commerce growth 
+                    and traditional retail performance. Our study investigates multiple aspects of 
+                    this relationship through various data sources and analytical approaches.
+
+                    ### Key Research Questions:
+                    1. How does E-Commerce growth affect traditional retail sales?
+                    2. What are the relationships between income levels and E-Commerce adoption?
+                    3. How do tax policies influence the retail landscape?
+                    4. What patterns emerge in foot traffic data for physical stores?
+
+                    ### Data Sources:
+                    - E-Commerce sales data (2009-2021)
+                    - Retail sales tax information
+                    - Income distribution data
+                    - Foot traffic patterns
+                    - Additional quarterly E-Commerce metrics
+
+                    ### Analytical Methods:
+                    - Time series analysis
+                    - Statistical correlations
+                    - Pattern recognition
+                    - Trend analysis
+                    """)
+            )
         ),
-        ui.nav_panel("Models", ui.h4("Panel D content"))
+        ui.nav_panel("Visualizations",
+            ui.card(
+                ui.h4("E-commerce Trends"),
+                ui.output_plot("ecommerce_trend")
+            ),
+            ui.card(
+                ui.h4("Foot Traffic Analysis"),
+                ui.output_plot("traffic_plot")
+            ),
+            ui.card(
+                ui.h4("Income Distribution"),
+                ui.output_plot("income_plot")
+            ),
+            ui.card(
+                ui.h4("Tax Analysis"),
+                ui.output_plot("tax_plot")
+            )
+        ),
+        ui.nav_panel("Data Tables",
+            ui.card(
+                ui.h4("Data Explorer"),
+                ui.layout_sidebar(
+                    ui.sidebar(
+                        ui.input_select(
+                            "table_choice",
+                            "1. Select Dataset",
+                            choices=[
+                                "E-commerce Data",
+                                "Tax Data",
+                                "Income Data",
+                                "Traffic Data"
+                            ]
+                        ),
+                        ui.input_numeric("rows_display", "2. Number of Rows to Display", 
+                                       value=10, min=5, max=50),
+                        ui.input_select(
+                            "sort_column",
+                            "3. Sort By Column",
+                            choices=["Year", "Total", "E-commerce"]
+                        ),
+                        ui.input_radio_buttons(
+                            "sort_order",
+                            "4. Sort Order",
+                            choices={"asc": "Ascending", "desc": "Descending"}
+                        ),
+                        ui.input_switch("show_stats", "5. Show Summary Statistics", value=False),
+                        ui.input_numeric("filter_threshold", 
+                                       "6. Filter Values Above (in thousands)", 
+                                       value=0)
+                    ),
+                    ui.output_text("summary_stats"),
+                    ui.output_data_frame("selected_table"),
+                )
+            )
+        ),
+        ui.nav_panel("Models",
+            ui.card(
+                ui.h4("Statistical Models"),
+                ui.layout_sidebar(
+                    ui.sidebar(
+                        ui.input_select(
+                            "model_type",
+                            "Select Model Type",
+                            choices=[
+                                "K-Means Clustering",
+                                "Linear Regression",
+                                "Time Series Decomposition"
+                            ]
+                        ),
+                        ui.input_numeric(
+                            "n_clusters",
+                            "Number of Clusters (K-Means)",
+                            value=3,
+                            min=2,
+                            max=6
+                        ),
+                        ui.input_select(
+                            "regression_var",
+                            "Regression Variable",
+                            choices=["Total Sales", "E-commerce Sales", "Tax Revenue"]
+                        )
+                    ),
+                    ui.card(
+                        ui.h4("Model Output"),
+                        ui.output_plot("model_plot"),
+                        ui.output_text("model_summary")
+                    )
+                )
+            )
+        )
     )
 )
 
-# Server logic
 def server(input, output, session):
     @output
-    @render.ui
-    def year_filter():
-        # Show year dropdown for all datasets except Traffic Data
-        if input.table_choice() != "Foot Traffic Data":
-            return ui.input_select("filter_year", "Select Year", ["All"] + dfEcom["Year"].tolist(), selected="All")
-        else:
-            return None
+    @render.plot
+    def ecommerce_trend():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(dfEcom["Year"], dfEcom["E-commerce"], marker='o', label='E-commerce Sales')
+        ax.set_title('E-commerce Sales Trend')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Sales Amount')
+        plt.xticks(rotation=45)
+        ax.legend()
+        plt.tight_layout()
+        return fig
 
     @output
-    @render.ui
-    def percentile_filter():
-        # Show percentile dropdown only if 'Income Data' is selected
-        if input.table_choice() == "Income Data":
-            return ui.input_select("filter_percentile", "Select Percentile", 
-                                   ["All", "10th_Percentile", "20th_Percentile", "30th_Percentile", "40th_Percentile", 
-                                    "50th_Percentile", "60th_Percentile", "70th_Percentile", "80th_Percentile", "90th_Percentile"], 
-                                   selected="All")
-        else:
-            return None
+    @render.plot
+    def traffic_plot():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(dfTraffic.index, dfTraffic["Residential Foot Traffic"], 
+                label='Residential', marker='o')
+        ax.plot(dfTraffic.index, dfTraffic["Worker Foot Traffic"], 
+                label='Worker', marker='o')
+        ax.set_title('Foot Traffic Patterns')
+        ax.set_xlabel('Time Period')
+        ax.set_ylabel('Number of Visitors')
+        ax.legend()
+        plt.tight_layout()
+        return fig
 
     @output
-    @render.ui
-    def table_title():
-        return ui.h4(f"Displaying data for: {input.table_choice()}")
+    @render.plot
+    def income_plot():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for percentile in ["50th Percentile", "90th Percentile", "10th Percentile"]:
+            ax.plot(dfIncom["Year"], dfIncom[percentile], 
+                   label=percentile, marker='o')
+        ax.set_title('Income Distribution Over Time')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Income Level')
+        plt.xticks(rotation=45)
+        ax.legend()
+        plt.tight_layout()
+        return fig
+
+    @output
+    @render.plot
+    def tax_plot():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.bar(dfTax["Year"], dfTax["Retail Sales Taxes Total"])
+        ax.set_title('Retail Sales Taxes Over Time')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Tax Amount')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        return fig
+
+    @reactive.Effect
+    @reactive.event(input.table_choice)
+    def _():
+        table_map = {
+            "E-commerce Data": list(dfEcom.columns),
+            "Tax Data": list(dfTax.columns),
+            "Income Data": list(dfIncom.columns),
+            "Traffic Data": list(dfTraffic.columns)
+        }
+        columns = table_map.get(input.table_choice(), [])
+        ui.update_select("sort_column", choices=columns)
 
     @output
     @render.data_frame
-    def filtered_table():
-        table = input.table_choice()
-        year = input.filter_year() if "filter_year" in input else "All"
-        percentile = input.filter_percentile() if "filter_percentile" in input else "All"
+    def selected_table():
+        table_map = {
+            "E-commerce Data": dfEcom,
+            "Tax Data": dfTax,
+            "Income Data": dfIncom,
+            "Traffic Data": dfTraffic
+        }
+        df = table_map.get(input.table_choice(), None)
+        
+        if df is None:
+            return None
+        
+        if input.filter_threshold() > 0:
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                df = df[df[numeric_cols[0]] > input.filter_threshold() * 1000]
+        
+        if input.sort_column() in df.columns:
+            df = df.sort_values(
+                by=input.sort_column(), 
+                ascending=input.sort_order() == "asc"
+            )
+        
+        return df.head(input.rows_display())
 
-        if table == "E-commerce Data":
-            data = dfEcom
-        elif table == "Tax Data":
-            data = dfTax
-        elif table == "Income Data":
-            data = dfIncom
-        elif table == "Residential Data":
-            data = dfResidential
-        elif table == "Foot Traffic Data":
-            data = dfTraffic
-        else:
-            data = pd.DataFrame()
+    @output
+    @render.text
+    def summary_stats():
+        if not input.show_stats():
+            return ""
+            
+        table_map = {
+            "E-commerce Data": dfEcom,
+            "Tax Data": dfTax,
+            "Income Data": dfIncom,
+            "Traffic Data": dfTraffic
+        }
+        df = table_map.get(input.table_choice(), None)
+        
+        if df is None:
+            return ""
+            
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) == 0:
+            return "No numeric columns to summarize"
+            
+        stats = df[numeric_cols].describe()
+        return f"Summary Statistics:\n{stats.to_string()}"
 
-        # Filter by year
-        if year != "All" and "Year" in data.columns:
-            data = data[data["Year"] == year]
+    @output
+    @render.plot
+    def model_plot():
+        if input.model_type() == "K-Means Clustering":
+            fig, ax = plt.subplots(figsize=(10, 6))
+            features = dfTraffic[['Residential Foot Traffic', 'Worker Foot Traffic']]
+            scaler = StandardScaler()
+            features_scaled = scaler.fit_transform(features)
+            kmeans = KMeans(n_clusters=input.n_clusters(), random_state=42)
+            clusters = kmeans.fit_predict(features_scaled)
+            scatter = ax.scatter(features['Residential Foot Traffic'], 
+                               features['Worker Foot Traffic'],
+                               c=clusters, cmap='viridis')
+            plt.colorbar(scatter)
+            ax.set_title('K-Means Clustering of Foot Traffic Patterns')
+            plt.tight_layout()
+            return fig
+        
+        elif input.model_type() == "Linear Regression":
+            fig, ax = plt.subplots(figsize=(10, 6))
+            X = dfEcom[['Total']].values
+            y = dfEcom['E-commerce'].values
+            model = LinearRegression()
+            model.fit(X, y)
+            ax.scatter(X, y)
+            ax.plot(X, model.predict(X), color='red')
+            ax.set_title('Linear Regression: Total Sales vs E-commerce')
+            plt.tight_layout()
+            return fig
+        
+        else:  # Time Series Decomposition
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(dfTraffic.index, dfTraffic['Residential Foot Traffic'])
+            ax.set_title('Time Series: Residential Foot Traffic')
+            plt.tight_layout()
+            return fig
 
-        # Filter by percentile if applicable (Income Data table)
-        if table == "Income Data" and percentile != "All":
-            data = data[["Year", percentile]]
+    @output
+    @render.text
+    def summary_stats():
+        if not input.show_stats():
+            return ""
+            
+        table_map = {
+            "E-commerce Data": dfEcom,
+            "Tax Data": dfTax,
+            "Income Data": dfIncom,
+            "Traffic Data": dfTraffic
+        }
+        df = table_map.get(input.table_choice(), None)
+        
+        if df is None:
+            return ""
+            
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) == 0:
+            return "No numeric columns to summarize"
+            
+        stats = df[numeric_cols].describe()
+        return f"Summary Statistics:\n{stats.to_string()}"
 
-        return data
-
-# Running the app
 app = App(app_ui, server)
-
